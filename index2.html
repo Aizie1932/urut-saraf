@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="ms" data-theme="emerald">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Kehadiran & Gaji - Urut Saraf Tanjung Malim</title>
+    
+    <!-- Libraries -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.9.4/dist/full.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <!-- Custom Styles -->
+    <style>
+        .glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); }
+        #reader { width: 100%; border: none; }
+        .view-section { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .active-view { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .overbreak-row { background-color: #fecaca !important; color: #991b1b; }
+        /* Animasi untuk modal error */
+        .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } }
+    </style>
+</head>
+<body class="bg-base-200 min-h-screen font-sans">
+
+    <!-- Navigation -->
+    <div class="navbar bg-base-100 shadow-lg sticky top-0 z-50">
+        <div class="flex-1">
+            <a class="btn btn-ghost normal-case text-xl text-primary">
+                <i class="fa-solid fa-spa"></i> Urut Saraf TM
+            </a>
+        </div>
+        <div class="flex-none">
+            <button class="btn btn-sm btn-ghost" onclick="toggleView('staff')"><i class="fa-solid fa-qrcode"></i> Staff</button>
+            <button class="btn btn-sm btn-primary" onclick="checkAdminAccess()"><i class="fa-solid fa-lock"></i> Admin</button>
+        </div>
+    </div>
+
+    <!-- MAIN CONTAINER -->
+    <main class="container mx-auto p-4">
+
+        <!-- ==================== STAFF VIEW ==================== -->
+        <section id="staff-view" class="view-section active-view">
+            <div class="hero min-h-[80vh] bg-base-100 rounded-box shadow-xl">
+                <div class="hero-content flex-col lg:flex-row-reverse gap-8">
+                    <div class="text-center lg:text-left w-full lg:w-1/2">
+                        <h1 class="text-5xl font-bold text-primary">Scan Kehadiran</h1>
+                        <p class="py-6 text-gray-600">Sila imbas kod QR atau gunakan butang di bawah.</p>
+                        <div id="reader" class="rounded-xl overflow-hidden shadow-inner border-4 border-primary min-h-[300px] bg-black flex items-center justify-center text-white">
+                            <span class="loading loading-infinity loading-lg"></span>
+                        </div>
+                        <div id="scan-status" class="mt-2 text-sm font-semibold text-gray-500">Kamera sedang memuat...</div>
+                    </div>
+                    
+                    <div class="card flex-shrink-0 w-full max-w-md shadow-2xl bg-base-100 glass-panel">
+                        <div class="card-body">
+                            <h2 class="card-title justify-center mb-4">Panel Kontrol Staf</h2>
+                            
+                            <div class="form-control">
+                                <label class="label"><span class="label-text font-bold">Pilih Nama Anda</span></label>
+                                <select id="staff-select" class="select select-bordered w-full select-primary" onchange="handleStaffSelect()">
+                                    <option disabled selected>-- Pilih Staf --</option>
+                                </select>
+                            </div>
+
+                            <div class="alert alert-info mt-4 shadow-sm" id="staff-status-display">
+                                <i class="fa-solid fa-circle-info"></i>
+                                <span>Sila pilih nama untuk lihat status hari ini.</span>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2 mt-4">
+                                <button onclick="handleAction('clockIn')" class="btn btn-success text-white"><i class="fa-solid fa-right-to-bracket"></i> Masuk</button>
+                                <button onclick="handleAction('breakStart')" class="btn btn-warning"><i class="fa-solid fa-mug-hot"></i> Mula Rehat</button>
+                                <button onclick="handleAction('breakEnd')" class="btn btn-info text-white"><i class="fa-solid fa-briefcase"></i> Akhir Rehat</button>
+                                <button onclick="handleAction('clockOut')" class="btn btn-error text-white"><i class="fa-solid fa-right-from-bracket"></i> Balik</button>
+                            </div>
+
+                            <div class="mt-4 pt-4 border-t border-gray-300">
+                                <button id="btn-delete-today" class="btn btn-sm w-full btn-outline btn-error hidden" onclick="confirmDeleteToday()">
+                                    <i class="fa-solid fa-trash-can"></i> Padam Rekod Hari Ini (Salah Key In)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== ADMIN VIEW ==================== -->
+        <section id="admin-view" class="view-section">
+            
+            <div class="card bg-base-100 shadow-xl mb-6">
+                <div class="card-body">
+                    <h2 class="card-title"><i class="fa-solid fa-filter"></i> Penapis Data & Laporan</h2>
+                    <div class="flex flex-wrap gap-4 items-end">
+                        
+                        <div class="form-control">
+                            <label class="label"><span class="label-text">Tarikh</span></label>
+                            <input type="date" id="filter-date" class="input input-bordered" onchange="renderAdminTable()">
+                        </div>
+                        <div class="form-control">
+                            <label class="label"><span class="label-text">Staf</span></label>
+                            <select id="filter-staff" class="select select-bordered" onchange="renderAdminTable()">
+                                <option value="all">Semua Staf</option>
+                            </select>
+                        </div>
+
+                        <button class="btn btn-primary" onclick="renderAdminTable()"><i class="fa-solid fa-rotate"></i> Kemaskini Data</button>
+                        
+                        <div class="dropdown dropdown-end ml-auto">
+                            <label tabindex="0" class="btn btn-sm btn-ghost"><i class="fa-solid fa-cog"></i> Seting API</label>
+                            <div tabindex="0" class="dropdown-content z-[1] card card-compact w-96 p-4 shadow bg-base-100 text-primary-content">
+                                <div class="card-body">
+                                    <h3 class="card-title text-sm text-black">Google Sheet Setup</h3>
+                                    <div class="form-control">
+                                        <label class="label text-xs text-black">Masukkan Web App URL (Google Apps Script)</label>
+                                        <input type="text" id="api-url" placeholder="https://script.google.com/macros/s/..." class="input input-bordered input-sm w-full text-black">
+                                    </div>
+                                    <button class="btn btn-sm btn-primary mt-2" onclick="saveApiUrl()">Simpan URL</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="card bg-base-100 shadow-xl">
+                    <div class="card-body">
+                        <h2 class="card-title text-primary"><i class="fa-solid fa-user-plus"></i> Tambah Staf Baharu</h2>
+                        <div class="form-control gap-2">
+                            <label class="label">Nama Pekerja</label>
+                            <input type="text" id="new-staff-name" class="input input-bordered" placeholder="Contoh: Syafiq">
+                            <label class="label text-xs text-gray-500">ID akan dijana secara automatik (S01, S02...)</label>
+                            <button class="btn btn-success" onclick="addNewStaff()">Daftar Staf</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card bg-base-100 shadow-xl">
+                    <div class="card-body">
+                        <h2 class="card-title text-primary"><i class="fa-solid fa-money-bill-wave"></i> Kadar Gaji Individu</h2>
+                        <div class="overflow-x-auto h-64">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Nama</th>
+                                        <th>Rate (RM/jam)</th>
+                                        <th>Kemaskini</th>
+                                        <th>Padam</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="staff-rates-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto bg-base-100 shadow-xl rounded-box">
+                <table class="table table-zebra w-full">
+                    <thead>
+                        <tr class="bg-base-200">
+                            <th>ID</th>
+                            <th>Nama</th>
+                            <th>Tarikh</th>
+                            <th>Masuk</th>
+                            <th>Balik</th>
+                            <th>Mula Rehat</th>
+                            <th>Akhir Rehat</th>
+                            <th>Mode</th>
+                            <th>Status</th>
+                            <th class="text-right">Gaji (RM)</th>
+                            <th class="text-center">Tindakan</th>
+                        </tr>
+                    </thead>
+                    <tbody id="attendance-table-body">
+                    </tbody>
+                    <tfoot>
+                        <tr class="font-bold bg-primary text-primary-content">
+                            <td colspan="9" class="text-right">Jumlah Keseluruhan (Terpilih):</td>
+                            <td class="text-right" id="total-salary-display">RM 0.00</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Login Modal -->
+    <dialog id="login_modal" class="modal">
+        <div class="modal-box w-full max-w-sm">
+            <h3 class="font-bold text-lg text-center mb-4">Login Admin</h3>
+            <div class="form-control mb-3">
+                <label class="label"><span class="label-text">Username</span></label>
+                <input type="text" id="login-user" class="input input-bordered" placeholder="Username">
+            </div>
+            <div class="form-control mb-4">
+                <label class="label"><span class="label-text">Password</span></label>
+                <div class="join w-full">
+                    <input type="password" id="login-pass" class="input input-bordered w-full join-item" placeholder="Password">
+                    <button class="btn join-item btn-ghost" type="button" onclick="togglePassword('login-pass', this)" title="Lihat Password">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-action justify-center">
+                <button class="btn btn-ghost" onclick="document.getElementById('login_modal').close()">Batal</button>
+                <button class="btn btn-primary" onclick="attemptLogin()">Log Masuk</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Edit Modal (Updated with Date) -->
+    <dialog id="edit_modal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg"><i class="fa-solid fa-pen-to-square"></i> Kemaskini Rekod</h3>
+            <div class="py-4 space-y-3">
+                <input type="hidden" id="edit-id">
+                
+                <!-- Tarikh & Name Row -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control">
+                        <label class="label"><span class="label-text font-bold">Tarikh</span></label>
+                        <input type="date" id="edit-date" class="input input-bordered input-primary">
+                    </div>
+                    <div class="form-control">
+                        <label class="label">Nama Staf</label>
+                        <input type="text" id="edit-name" class="input input-bordered bg-base-200" disabled>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Times Row -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="form-control"><label class="label">Masa Masuk</label><input type="time" id="edit-in" class="input input-bordered"></div>
+                    <div class="form-control"><label class="label">Masa Balik</label><input type="time" id="edit-out" class="input input-bordered"></div>
+                </div>
+                
+                <!-- Break Row -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="form-control"><label class="label">Mula Rehat</label><input type="time" id="edit-break-start" class="input input-bordered"></div>
+                    <div class="form-control"><label class="label">Akhir Rehat</label><input type="time" id="edit-break-end" class="input input-bordered"></div>
+                </div>
+
+                <div class="form-control mt-2">
+                    <label class="label">Penambahbaikan Gaji (RM)</label>
+                    <input type="number" id="edit-adjustment" class="input input-bordered" placeholder="0.00" step="0.01">
+                    <label class="label text-xs text-gray-500">Gunakan +/- untuk tambah atau tolak gaji</label>
+                </div>
+            </div>
+            <div class="modal-action">
+                <button class="btn" onclick="closeModal()">Batal</button>
+                <button class="btn btn-primary" onclick="saveEdit()">Simpan Perubahan</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Delete Confirmation Modal (Reusing dialog structure for cleaner UX) -->
+    <dialog id="delete_modal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg text-error"><i class="fa-solid fa-triangle-exclamation"></i> Sahkan Padam</h3>
+            <p class="py-4">Adakah anda pasti mahu memadam rekod ini? Tindakan ini tidak boleh diundur.</p>
+            <div class="modal-action">
+                <button class="btn" onclick="document.getElementById('delete_modal').close()">Batal</button>
+                <button class="btn btn-error" id="confirm-delete-btn">Ya, Padam</button>
+            </div>
+        </div>
+    </dialog>
+
+    <div class="toast toast-end" id="toast-container"></div>
+
+    <script>
+        // ================= CONFIG & STATE =================
+        let STAFF_LIST = []; 
+        let STAFF_RATES = {}; 
+        
+        const ADMIN_USERNAME = "Aizie";
+        const ADMIN_PASSWORD = "Shazie2011#";
+        let isAdminLoggedIn = false;
+        let deleteTargetId = null; // Store ID for delete confirmation
+
+        document.getElementById('filter-date').valueAsDate = new Date();
+
+        let attendanceData = [];
+        
+        function loadAllData() {
+            const savedStaff = localStorage.getItem('staffList');
+            if (savedStaff) {
+                STAFF_LIST = JSON.parse(savedStaff);
+            } else {
+                STAFF_LIST = ["Aizie", "Hawa", "Wan", "Iza", "Azizan"];
+                saveStaffData();
+            }
+
+            const savedRates = localStorage.getItem('staffRates');
+            if (savedRates) {
+                STAFF_RATES = JSON.parse(savedRates);
+            } else {
+                STAFF_LIST.forEach(name => STAFF_RATES[name] = 8);
+                saveStaffData();
+            }
+
+            const saved = localStorage.getItem('attendanceData');
+            if (saved) {
+                attendanceData = JSON.parse(saved);
+            } else {
+                attendanceData = [];
+            }
+
+            populateDropdowns();
+        }
+
+        function saveStaffData() {
+            localStorage.setItem('staffList', JSON.stringify(STAFF_LIST));
+            localStorage.setItem('staffRates', JSON.stringify(STAFF_RATES));
+        }
+
+        function saveDataToLocalStorage() {
+            localStorage.setItem('attendanceData', JSON.stringify(attendanceData));
+        }
+
+        function populateDropdowns() {
+            const staffSelect = document.getElementById('staff-select');
+            const filterSelect = document.getElementById('filter-staff');
+            
+            staffSelect.innerHTML = '<option disabled selected>-- Pilih Staf --</option>';
+            filterSelect.innerHTML = '<option value="all">Semua Staf</option>';
+
+            STAFF_LIST.forEach(name => {
+                const opt1 = document.createElement('option');
+                opt1.value = name;
+                opt1.innerText = name;
+                staffSelect.appendChild(opt1);
+
+                const opt2 = document.createElement('option');
+                opt2.value = name;
+                opt2.innerText = name;
+                filterSelect.appendChild(opt2);
+            });
+
+            renderStaffRates();
+        }
+
+        let API_URL = localStorage.getItem('sheet_api_url') || '';
+
+        function saveApiUrl() {
+            API_URL = document.getElementById('api-url').value;
+            localStorage.setItem('sheet_api_url', API_URL);
+            showToast("URL API disimpan!", "success");
+        }
+
+        async function syncToSheet(data, action = 'add') {
+            if (!API_URL) return true; 
+            const payload = { action: action, data: data };
+            try {
+                // Noted: no-cors mode sends request but response is opaque. 
+                // Assuming successful dispatch if no network error.
+                await fetch(API_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                return true;
+            } catch (error) {
+                console.error("Sync Error:", error);
+                return false;
+            }
+        }
+
+        // ================= NAVIGATION & LOGIN =================
+        function toggleView(viewName) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active-view'));
+            document.getElementById(`${viewName}-view`).classList.add('active-view');
+            if(viewName === 'admin') {
+                renderAdminTable();
+                stopScanner();
+            } else {
+                initScanner();
+            }
+        }
+
+        function checkAdminAccess() {
+            if (isAdminLoggedIn) {
+                toggleView('admin');
+            } else {
+                openLoginModal();
+            }
+        }
+
+        function openLoginModal() {
+            document.getElementById('login-user').value = '';
+            document.getElementById('login-pass').value = '';
+            document.getElementById('login_modal').showModal();
+        }
+
+        function togglePassword(inputId, btn) {
+            const input = document.getElementById(inputId);
+            const icon = btn.querySelector('i');
+            if (input.type === "password") {
+                input.type = "text";
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                input.type = "password";
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+
+        function attemptLogin() {
+            const user = document.getElementById('login-user').value;
+            const pass = document.getElementById('login-pass').value;
+
+            if (user === ADMIN_USERNAME && pass === ADMIN_PASSWORD) {
+                isAdminLoggedIn = true;
+                document.getElementById('login_modal').close();
+                toggleView('admin');
+                showToast("Selamat datang, Admin.", "success");
+            } else {
+                showToast("Username atau Password salah!", "error");
+                const modalBox = document.querySelector('#login_modal .modal-box');
+                modalBox.classList.add('shake');
+                setTimeout(() => modalBox.classList.remove('shake'), 500);
+            }
+        }
+
+        // ================= FEATURE: MANAGE STAFF =================
+        function renderStaffRates() {
+            const tbody = document.getElementById('staff-rates-body');
+            tbody.innerHTML = '';
+            
+            STAFF_LIST.forEach(name => {
+                const rate = STAFF_RATES[name] || 8;
+                // Sanitasi nama untuk elak error dalam fungsi onclick
+                const safeName = name.replace(/'/g, "\\'");
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><span class="badge badge-neutral badge-sm">ID: S${String(STAFF_LIST.indexOf(name) + 1).padStart(2, '0')}</span></td>
+                    <td class="font-bold">${name}</td>
+                    <td>
+                        <input type="number" value="${rate}" step="0.01" class="input input-bordered input-xs w-20" id="rate-input-${name.replace(/'/g, "")}">
+                    </td>
+                    <td>
+                        <button class="btn btn-xs btn-primary" onclick="updateStaffRate('${safeName}')">Set</button>
+                    </td>
+                    <td>
+                        <button class="btn btn-xs btn-error" onclick="deleteStaff('${safeName}')"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateStaffRate(name) {
+            const cleanName = name.replace(/\\/g, ''); 
+            const input = document.getElementById(`rate-input-${cleanName.replace(/'/g, "")}`);
+            if(!input) return; 
+            
+            const val = parseFloat(input.value);
+            if(!isNaN(val) && val > 0) {
+                STAFF_RATES[cleanName] = val;
+                saveStaffData();
+                renderAdminTable(); 
+                showToast(`Rate ${cleanName} dikemaskini: RM${val}/jam`, "success");
+            }
+        }
+
+        function deleteStaff(name) {
+            const cleanName = name.replace(/\\/g, '');
+            if(confirm(`Adakah anda pasti mahu membuang staf ${cleanName} dari sistem?\n\n1. ${cleanName} tidak boleh clock-in lagi.\n2. Rate gaji dipadam.\n3. Rekod gaji lama tetap disimpan.`)) {
+                STAFF_LIST = STAFF_LIST.filter(s => s !== cleanName);
+                delete STAFF_RATES[cleanName];
+                saveStaffData();
+                populateDropdowns();
+                showToast(`Staf ${cleanName} telah dipadam.`, "error");
+            }
+        }
+
+        function addNewStaff() {
+            const name = document.getElementById('new-staff-name').value.trim();
+            if (!name) return showToast("Sila masukkan nama staf!", "warning");
+            
+            if (STAFF_LIST.includes(name)) return showToast("Staf ini sudah wujud!", "error");
+
+            STAFF_LIST.push(name);
+            STAFF_RATES[name] = 8;
+            
+            saveStaffData();
+            populateDropdowns();
+            
+            document.getElementById('new-staff-name').value = '';
+            showToast(`Staf ${name} berjaya didaftar.`, "success");
+        }
+
+        // ================= ROBUST DELETE RECORD =================
+        function confirmDelete(id) {
+            deleteTargetId = id;
+            document.getElementById('delete_modal').showModal();
+        }
+
+        document.getElementById('confirm-delete-btn').addEventListener('click', function() {
+            if (deleteTargetId !== null) {
+                processDelete(deleteTargetId);
+                document.getElementById('delete_modal').close();
+                deleteTargetId = null;
+            }
+        });
+
+        function processDelete(id) {
+            id = Number(id);
+            const originalLength = attendanceData.length;
+            
+            // Filter menggunakan String untuk lebih selamat
+            attendanceData = attendanceData.filter(record => String(record.id) !== String(id));
+            
+            if (attendanceData.length === originalLength) {
+                showToast("Ralat: Rekod tidak dijumpai untuk dipadam.", "error");
+            } else {
+                saveDataToLocalStorage();
+                syncToSheet({id: id}, 'delete');
+                renderAdminTable();
+                showToast("Rekod telah dipadam.", "success");
+            }
+        }
+
+        // ================= STAFF VIEW ACTIONS =================
+        function handleStaffSelect() {
+            const name = document.getElementById('staff-select').value;
+            checkCurrentStatus(name);
+        }
+
+        function checkCurrentStatus(name) {
+            const today = new Date().toISOString().split('T')[0];
+            const record = attendanceData.find(r => r.name === name && r.date === today);
+            const display = document.getElementById('staff-status-display');
+            const btnDelete = document.getElementById('btn-delete-today');
+            
+            if (!record) {
+                display.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> <span>${name}: Belum masuk kerja hari ini.</span>`;
+                display.className = "alert alert-warning mt-4 shadow-sm";
+                btnDelete.classList.add('hidden'); 
+            } else if (!record.out) {
+                display.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> <span>${name}: Sedang bekerja (Masuk ${record.in}).</span>`;
+                display.className = "alert alert-info mt-4 shadow-sm";
+                btnDelete.classList.remove('hidden'); 
+                // Set onclick secara dinamik
+                btnDelete.onclick = () => confirmDelete(record.id);
+            } else {
+                display.innerHTML = `<i class="fa-solid fa-check-circle"></i> <span>${name}: Selesai bekerja (Balik ${record.out}).</span>`;
+                display.className = "alert alert-success mt-4 shadow-sm";
+                btnDelete.classList.remove('hidden'); 
+                btnDelete.onclick = () => confirmDelete(record.id);
+            }
+        }
+
+        function confirmDeleteToday() {
+            // Fungsi ini hanya wrapper, logik sebenar ada dalam onclick checkCurrentStatus
+            showToast("Sila pilih butang padam yang muncul selepas memilih staf.", "warning");
+        }
+
+        function handleAction(actionType) {
+            const name = document.getElementById('staff-select').value;
+            if (!name || name === "-- Pilih Staf --") return showToast("Sila pilih nama staf dahulu!", "warning");
+            executeAction(name, actionType);
+        }
+
+        function executeAction(name, actionType) {
+            const today = new Date().toISOString().split('T')[0];
+            const nowTime = new Date().toTimeString().split(' ')[0].substring(0,5); 
+            let record = attendanceData.find(r => r.name === name && r.date === today);
+
+            if (!record) {
+                if (actionType !== 'clockIn') return showToast("Ralat: Sila 'Masuk' kerja dahulu.", "error");
+                record = { id: Date.now(), name: name, date: today, in: nowTime, out: null, breakStart: null, breakEnd: null, adjustment: 0 };
+                attendanceData.push(record);
+                syncToSheet(record, 'add');
+                saveDataToLocalStorage(); 
+                showToast(`Berjaya Masuk: ${name} pada ${nowTime}`, "success");
+            } else {
+                let updated = false;
+                if (actionType === 'breakStart' && !record.breakStart) { record.breakStart = nowTime; updated = true; showToast("Rehat bermula.", "success"); }
+                else if (actionType === 'breakEnd' && record.breakStart && !record.breakEnd) { record.breakEnd = nowTime; updated = true; showToast("Rehat tamat.", "success"); }
+                else if (actionType === 'clockOut' && !record.out) { record.out = nowTime; updated = true; showToast(`Berjaya Balik: ${name} pada ${nowTime}`, "success"); }
+                else if (actionType === 'clockIn' && record.in) showToast("Anda sudah daftar masuk hari ini.", "warning");
+                else if (!updated) showToast("Tindakan tidak sah atau sudah direkodkan.", "error");
+                
+                if (updated) {
+                    syncToSheet(record, 'update');
+                    saveDataToLocalStorage(); 
+                }
+            }
+            checkCurrentStatus(name);
+        }
+
+        // ================= CALCULATION ENGINE =================
+        function getWorkMode(inTime, outTime) {
+            if (!inTime || !outTime) return 'Unknown';
+            const hIn = parseInt(inTime.split(':')[0]);
+            const hOut = parseInt(outTime.split(':')[0]);
+            if (hIn <= 11 && hOut >= 21) return 'Full';
+            if (hIn > 11 && hIn <= 16) return 'Noon';
+            if (hIn <= 11) return 'Morning';
+            return 'Unknown';
+        }
+
+        function getHoursDiff(start, end) {
+            if (!start || !end) return 0;
+            const [h1, m1] = start.split(':').map(Number);
+            const [h2, m2] = end.split(':').map(Number);
+            return ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+        }
+
+        function calculateSalaryData(record) {
+            if (!record.out) return { status: 'Bekerja', netSalary: 0, overbreak: false };
+            
+            const individualRate = STAFF_RATES[record.name] || 8;
+            
+            const mode = getWorkMode(record.in, record.out);
+            const totalWorkHours = getHoursDiff(record.in, record.out);
+            
+            let totalBreakHours = 0;
+            if (record.breakStart && record.breakEnd) totalBreakHours = getHoursDiff(record.breakStart, record.breakEnd);
+
+            let allowedBreak = (mode === 'Full') ? 2 : 1;
+            let overbreakHours = Math.max(0, totalBreakHours - allowedBreak);
+            
+            let netWorkHours = totalWorkHours - totalBreakHours; 
+            let payHours = netWorkHours - overbreakHours;
+            
+            let grossPay = payHours * individualRate;
+            let finalPay = grossPay + (parseFloat(record.adjustment) || 0);
+
+            return {
+                staffId: "S" + String(STAFF_LIST.indexOf(record.name) + 1).padStart(2, '0'),
+                rateUsed: individualRate,
+                mode: mode,
+                totalBreak: totalBreakHours.toFixed(2),
+                isOverbreak: totalBreakHours > allowedBreak,
+                overbreakVal: overbreakHours.toFixed(2),
+                finalPay: finalPay.toFixed(2)
+            };
+        }
+
+        // ================= ADMIN: CRUD & TABLE =================
+        function renderAdminTable() {
+            const tbody = document.getElementById('attendance-table-body');
+            tbody.innerHTML = '';
+            
+            const dateFilter = document.getElementById('filter-date').value;
+            const staffFilter = document.getElementById('filter-staff').value;
+            let grandTotal = 0;
+
+            const filteredData = attendanceData.filter(item => {
+                const matchDate = item.date === dateFilter;
+                const matchStaff = staffFilter === 'all' || item.name === staffFilter;
+                return matchDate && matchStaff;
+            });
+
+            // Sort by Name, then Time In
+            filteredData.sort((a, b) => a.name.localeCompare(b.name) || a.in.localeCompare(b.in));
+
+            filteredData.forEach(item => {
+                const calc = calculateSalaryData(item);
+                grandTotal += parseFloat(calc.finalPay);
+                const rowClass = calc.isOverbreak ? 'overbreak-row' : '';
+                
+                const tr = document.createElement('tr');
+                tr.className = rowClass;
+                tr.innerHTML = `
+                    <td><span class="badge badge-neutral">${calc.staffId}</span></td>
+                    <td class="font-bold">${item.name}</td>
+                    <td>${item.date}</td>
+                    <td>${item.in}</td>
+                    <td>${item.out || '-'}</td>
+                    <td>${item.breakStart || '-'}</td>
+                    <td>${item.breakEnd || '-'}</td>
+                    <td>${calc.mode}</td>
+                    <td>${calc.isOverbreak ? '<span class="badge badge-error badge-sm">Overbreak</span>' : '<span class="badge badge-success badge-sm">Normal</span>'}</td>
+                    <td class="text-right font-bold">RM ${calc.finalPay}</td>
+                    <td class="text-center space-x-1">
+                        <button class="btn btn-xs btn-square btn-ghost text-primary" onclick="openEditModal(${item.id})"><i class="fa-solid fa-pen"></i></button>
+                        <button class="btn btn-xs btn-square btn-error" onclick="confirmDelete(${item.id})"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('total-salary-display').innerText = `RM ${grandTotal.toFixed(2)}`;
+        }
+
+        // ================= EDIT MODAL (UPDATED) =================
+        function openEditModal(id) {
+            const record = attendanceData.find(r => r.id === id);
+            if (!record) return;
+            
+            // Populate Data
+            document.getElementById('edit-id').value = record.id;
+            document.getElementById('edit-name').value = record.name;
+            document.getElementById('edit-date').value = record.date; // NEW: Populate Date
+            document.getElementById('edit-in').value = record.in;
+            document.getElementById('edit-out').value = record.out || '';
+            document.getElementById('edit-break-start').value = record.breakStart || '';
+            document.getElementById('edit-break-end').value = record.breakEnd || '';
+            document.getElementById('edit-adjustment').value = record.adjustment || 0;
+            
+            document.getElementById('edit_modal').showModal();
+        }
+
+        function closeModal() { document.getElementById('edit_modal').close(); }
+
+        function saveEdit() {
+            const id = Number(document.getElementById('edit-id').value);
+            const record = attendanceData.find(r => r.id === id);
+            
+            if (record) {
+                // Get values including the new Date
+                record.date = document.getElementById('edit-date').value; // NEW: Save Date
+                record.in = document.getElementById('edit-in').value;
+                record.out = document.getElementById('edit-out').value || null;
+                record.breakStart = document.getElementById('edit-break-start').value || null;
+                record.breakEnd = document.getElementById('edit-break-end').value || null;
+                record.adjustment = parseFloat(document.getElementById('edit-adjustment').value) || 0;
+
+                syncToSheet(record, 'update');
+                saveDataToLocalStorage(); 
+                renderAdminTable();
+                closeModal();
+                showToast("Rekod berjaya dikemaskini.", "success");
+            }
+        }
+
+        // ================= UTILS =================
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type} shadow-lg mb-2 cursor-pointer transition-opacity duration-300`;
+            toast.innerHTML = `<span>${message}</span>`;
+            toast.onclick = () => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            };
+            container.appendChild(toast);
+            setTimeout(() => {
+                if(toast.parentElement) {
+                    toast.classList.add('opacity-0');
+                    setTimeout(() => toast.remove(), 300);
+                }
+            }, 3000);
+        }
+
+        // ================= QR SCANNER LOGIC =================
+        let html5QrcodeScanner = null;
+
+        function initScanner() {
+            if (html5QrcodeScanner) return;
+            const readerElement = document.getElementById('reader');
+            html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 }, false);
+            
+            // Clear loading text
+            readerElement.innerHTML = ""; 
+            
+            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        }
+
+        function stopScanner() {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear().catch(e => console.error("Failed to clear scanner", e));
+                html5QrcodeScanner = null;
+                // Restore UI placeholder
+                document.getElementById('reader').innerHTML = '<span class="loading loading-infinity loading-lg"></span>';
+            }
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            // Audio Feedback
+            // const audio = new Audio('beep.mp3'); audio.play().catch(e=>{});
+            
+            if (decodedText.includes("STAFF:") && decodedText.includes("ACTION:")) {
+                // Format Custom QR: STAF:Nama;ACTION:clockIn
+                const name = decodedText.split(';').find(p => p.startsWith('STAFF:')).split(':')[1];
+                const action = decodedText.split(';').find(p => p.startsWith('ACTION:')).split(':')[1];
+                
+                if(STAFF_LIST.includes(name)) {
+                    document.getElementById('staff-select').value = name;
+                    handleStaffSelect();
+                    executeAction(name, action);
+                } else {
+                    showToast(`QR untuk ${name} tidak sah dalam sistem.`, "error");
+                }
+
+            } else if (STAFF_LIST.includes(decodedText)) {
+                // Format Simple QR: Nama Staf Sahaja
+                document.getElementById('staff-select').value = decodedText;
+                handleStaffSelect(); 
+                showToast(`QR ${decodedText} dikesan.`, "info");
+            } else {
+                showToast("QR tidak dikenali.", "warning");
+            }
+        }
+        function onScanFailure(error) {
+            // Silent fail to prevent console spam
+        }
+
+        // Initialize
+        window.onload = function() {
+            document.getElementById('api-url').value = API_URL;
+            loadAllData(); 
+            initScanner(); 
+        };
+    </script>
+</body>
+</html>
