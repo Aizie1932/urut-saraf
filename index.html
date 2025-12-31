@@ -19,6 +19,9 @@
         .active-view { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .overbreak-row { background-color: #fecaca !important; color: #991b1b; }
+        /* Animasi untuk modal error */
+        .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } }
     </style>
 </head>
 <body class="bg-base-200 min-h-screen font-sans">
@@ -43,24 +46,27 @@
         <section id="staff-view" class="view-section active-view">
             <div class="hero min-h-[80vh] bg-base-100 rounded-box shadow-xl">
                 <div class="hero-content flex-col lg:flex-row-reverse gap-8">
-                    <div class="text-center lg:text-left">
+                    <div class="text-center lg:text-left w-full lg:w-1/2">
                         <h1 class="text-5xl font-bold text-primary">Scan Kehadiran</h1>
                         <p class="py-6 text-gray-600">Sila imbas kod QR atau gunakan butang di bawah.</p>
-                        <div id="reader" class="rounded-xl overflow-hidden shadow-inner border-4 border-primary"></div>
+                        <div id="reader" class="rounded-xl overflow-hidden shadow-inner border-4 border-primary min-h-[300px] bg-black flex items-center justify-center text-white">
+                            <span class="loading loading-infinity loading-lg"></span>
+                        </div>
                         <div id="scan-status" class="mt-2 text-sm font-semibold text-gray-500">Kamera sedang memuat...</div>
                     </div>
+                    
                     <div class="card flex-shrink-0 w-full max-w-md shadow-2xl bg-base-100 glass-panel">
                         <div class="card-body">
                             <h2 class="card-title justify-center mb-4">Panel Kontrol Staf</h2>
                             
                             <div class="form-control">
-                                <label class="label"><span class="label-text">Pilih Nama Anda</span></label>
-                                <select id="staff-select" class="select select-bordered w-full" onchange="handleStaffSelect()">
+                                <label class="label"><span class="label-text font-bold">Pilih Nama Anda</span></label>
+                                <select id="staff-select" class="select select-bordered w-full select-primary" onchange="handleStaffSelect()">
                                     <option disabled selected>-- Pilih Staf --</option>
                                 </select>
                             </div>
 
-                            <div class="alert alert-info mt-4" id="staff-status-display">
+                            <div class="alert alert-info mt-4 shadow-sm" id="staff-status-display">
                                 <i class="fa-solid fa-circle-info"></i>
                                 <span>Sila pilih nama untuk lihat status hari ini.</span>
                             </div>
@@ -73,7 +79,7 @@
                             </div>
 
                             <div class="mt-4 pt-4 border-t border-gray-300">
-                                <button id="btn-delete-today" class="btn btn-sm w-full btn-outline btn-error hidden" onclick="deleteTodayRecord()">
+                                <button id="btn-delete-today" class="btn btn-sm w-full btn-outline btn-error hidden" onclick="confirmDeleteToday()">
                                     <i class="fa-solid fa-trash-can"></i> Padam Rekod Hari Ini (Salah Key In)
                                 </button>
                             </div>
@@ -109,7 +115,10 @@
                             <div tabindex="0" class="dropdown-content z-[1] card card-compact w-96 p-4 shadow bg-base-100 text-primary-content">
                                 <div class="card-body">
                                     <h3 class="card-title text-sm text-black">Google Sheet Setup</h3>
-                                    <input type="text" id="api-url" placeholder="Masukkan Web App URL" class="input input-bordered input-sm w-full text-black">
+                                    <div class="form-control">
+                                        <label class="label text-xs text-black">Masukkan Web App URL (Google Apps Script)</label>
+                                        <input type="text" id="api-url" placeholder="https://script.google.com/macros/s/..." class="input input-bordered input-sm w-full text-black">
+                                    </div>
                                     <button class="btn btn-sm btn-primary mt-2" onclick="saveApiUrl()">Simpan URL</button>
                                 </div>
                             </div>
@@ -185,6 +194,7 @@
 
     </main>
 
+    <!-- Login Modal -->
     <dialog id="login_modal" class="modal">
         <div class="modal-box w-full max-w-sm">
             <h3 class="font-bold text-lg text-center mb-4">Login Admin</h3>
@@ -208,31 +218,60 @@
         </div>
     </dialog>
 
+    <!-- Edit Modal (Updated with Date) -->
     <dialog id="edit_modal" class="modal">
         <div class="modal-box">
             <h3 class="font-bold text-lg"><i class="fa-solid fa-pen-to-square"></i> Kemaskini Rekod</h3>
             <div class="py-4 space-y-3">
                 <input type="hidden" id="edit-id">
-                <div class="form-control">
-                    <label class="label">Nama Staf</label>
-                    <input type="text" id="edit-name" class="input input-bordered" disabled>
+                
+                <!-- Tarikh & Name Row -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control">
+                        <label class="label"><span class="label-text font-bold">Tarikh</span></label>
+                        <input type="date" id="edit-date" class="input input-bordered input-primary">
+                    </div>
+                    <div class="form-control">
+                        <label class="label">Nama Staf</label>
+                        <input type="text" id="edit-name" class="input input-bordered bg-base-200" disabled>
+                    </div>
                 </div>
+
+                <div class="divider"></div>
+
+                <!-- Times Row -->
                 <div class="grid grid-cols-2 gap-2">
                     <div class="form-control"><label class="label">Masa Masuk</label><input type="time" id="edit-in" class="input input-bordered"></div>
                     <div class="form-control"><label class="label">Masa Balik</label><input type="time" id="edit-out" class="input input-bordered"></div>
                 </div>
+                
+                <!-- Break Row -->
                 <div class="grid grid-cols-2 gap-2">
                     <div class="form-control"><label class="label">Mula Rehat</label><input type="time" id="edit-break-start" class="input input-bordered"></div>
                     <div class="form-control"><label class="label">Akhir Rehat</label><input type="time" id="edit-break-end" class="input input-bordered"></div>
                 </div>
-                <div class="form-control">
+
+                <div class="form-control mt-2">
                     <label class="label">Penambahbaikan Gaji (RM)</label>
                     <input type="number" id="edit-adjustment" class="input input-bordered" placeholder="0.00" step="0.01">
+                    <label class="label text-xs text-gray-500">Gunakan +/- untuk tambah atau tolak gaji</label>
                 </div>
             </div>
             <div class="modal-action">
                 <button class="btn" onclick="closeModal()">Batal</button>
-                <button class="btn btn-primary" onclick="saveEdit()">Simpan</button>
+                <button class="btn btn-primary" onclick="saveEdit()">Simpan Perubahan</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Delete Confirmation Modal (Reusing dialog structure for cleaner UX) -->
+    <dialog id="delete_modal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg text-error"><i class="fa-solid fa-triangle-exclamation"></i> Sahkan Padam</h3>
+            <p class="py-4">Adakah anda pasti mahu memadam rekod ini? Tindakan ini tidak boleh diundur.</p>
+            <div class="modal-action">
+                <button class="btn" onclick="document.getElementById('delete_modal').close()">Batal</button>
+                <button class="btn btn-error" id="confirm-delete-btn">Ya, Padam</button>
             </div>
         </div>
     </dialog>
@@ -247,6 +286,7 @@
         const ADMIN_USERNAME = "Aizie";
         const ADMIN_PASSWORD = "Shazie2011#";
         let isAdminLoggedIn = false;
+        let deleteTargetId = null; // Store ID for delete confirmation
 
         document.getElementById('filter-date').valueAsDate = new Date();
 
@@ -322,6 +362,8 @@
             if (!API_URL) return true; 
             const payload = { action: action, data: data };
             try {
+                // Noted: no-cors mode sends request but response is opaque. 
+                // Assuming successful dispatch if no network error.
                 await fetch(API_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 return true;
             } catch (error) {
@@ -382,8 +424,8 @@
             } else {
                 showToast("Username atau Password salah!", "error");
                 const modalBox = document.querySelector('#login_modal .modal-box');
-                modalBox.classList.add('animate-bounce');
-                setTimeout(() => modalBox.classList.remove('animate-bounce'), 500);
+                modalBox.classList.add('shake');
+                setTimeout(() => modalBox.classList.remove('shake'), 500);
             }
         }
 
@@ -394,7 +436,7 @@
             
             STAFF_LIST.forEach(name => {
                 const rate = STAFF_RATES[name] || 8;
-                // FIX: Escape quotes in name to prevent JS error in onclick
+                // Sanitasi nama untuk elak error dalam fungsi onclick
                 const safeName = name.replace(/'/g, "\\'");
                 
                 const tr = document.createElement('tr');
@@ -416,8 +458,7 @@
         }
 
         function updateStaffRate(name) {
-            // Sanitize name for lookup as ID might have been escaped
-            const cleanName = name.replace(/\\/g, ''); // Remove backslashes added for escape
+            const cleanName = name.replace(/\\/g, ''); 
             const input = document.getElementById(`rate-input-${cleanName.replace(/'/g, "")}`);
             if(!input) return; 
             
@@ -458,25 +499,33 @@
         }
 
         // ================= ROBUST DELETE RECORD =================
-        function deleteRecord(id) {
-            // Debug Alert
-            alert(`Sistem menerima ID untuk dipadam: ${id}`);
+        function confirmDelete(id) {
+            deleteTargetId = id;
+            document.getElementById('delete_modal').showModal();
+        }
 
+        document.getElementById('confirm-delete-btn').addEventListener('click', function() {
+            if (deleteTargetId !== null) {
+                processDelete(deleteTargetId);
+                document.getElementById('delete_modal').close();
+                deleteTargetId = null;
+            }
+        });
+
+        function processDelete(id) {
             id = Number(id);
-            if(confirm("Adakah anda pasti mahu memadam rekod ini?")) {
-                
-                // FIX: Use String comparison to be 100% safe against type issues
-                const originalLength = attendanceData.length;
-                attendanceData = attendanceData.filter(record => String(record.id) !== String(id));
-                
-                if (attendanceData.length === originalLength) {
-                    alert("ALERT: ID tidak dijumpai dalam sistem. Data mungkin rosak.");
-                } else {
-                    saveDataToLocalStorage();
-                    syncToSheet({id: id}, 'delete');
-                    renderAdminTable();
-                    showToast("Rekod telah dipadam.", "error");
-                }
+            const originalLength = attendanceData.length;
+            
+            // Filter menggunakan String untuk lebih selamat
+            attendanceData = attendanceData.filter(record => String(record.id) !== String(id));
+            
+            if (attendanceData.length === originalLength) {
+                showToast("Ralat: Rekod tidak dijumpai untuk dipadam.", "error");
+            } else {
+                saveDataToLocalStorage();
+                syncToSheet({id: id}, 'delete');
+                renderAdminTable();
+                showToast("Rekod telah dipadam.", "success");
             }
         }
 
@@ -494,27 +543,25 @@
             
             if (!record) {
                 display.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> <span>${name}: Belum masuk kerja hari ini.</span>`;
-                display.className = "alert alert-warning mt-4";
+                display.className = "alert alert-warning mt-4 shadow-sm";
                 btnDelete.classList.add('hidden'); 
             } else if (!record.out) {
                 display.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> <span>${name}: Sedang bekerja (Masuk ${record.in}).</span>`;
-                display.className = "alert alert-info mt-4";
+                display.className = "alert alert-info mt-4 shadow-sm";
                 btnDelete.classList.remove('hidden'); 
-                btnDelete.onclick = () => deleteTodayRecord(record.id);
+                // Set onclick secara dinamik
+                btnDelete.onclick = () => confirmDelete(record.id);
             } else {
                 display.innerHTML = `<i class="fa-solid fa-check-circle"></i> <span>${name}: Selesai bekerja (Balik ${record.out}).</span>`;
-                display.className = "alert alert-success mt-4";
+                display.className = "alert alert-success mt-4 shadow-sm";
                 btnDelete.classList.remove('hidden'); 
-                btnDelete.onclick = () => deleteTodayRecord(record.id);
+                btnDelete.onclick = () => confirmDelete(record.id);
             }
         }
 
-        function deleteTodayRecord(id) {
-            if(confirm("Adakah anda tersilap key-in? Padam rekod hari ini?")) {
-                deleteRecord(id);
-                const name = document.getElementById('staff-select').value;
-                checkCurrentStatus(name);
-            }
+        function confirmDeleteToday() {
+            // Fungsi ini hanya wrapper, logik sebenar ada dalam onclick checkCurrentStatus
+            showToast("Sila pilih butang padam yang muncul selepas memilih staf.", "warning");
         }
 
         function handleAction(actionType) {
@@ -541,7 +588,7 @@
                 else if (actionType === 'breakEnd' && record.breakStart && !record.breakEnd) { record.breakEnd = nowTime; updated = true; showToast("Rehat tamat.", "success"); }
                 else if (actionType === 'clockOut' && !record.out) { record.out = nowTime; updated = true; showToast(`Berjaya Balik: ${name} pada ${nowTime}`, "success"); }
                 else if (actionType === 'clockIn' && record.in) showToast("Anda sudah daftar masuk hari ini.", "warning");
-                else if (!updated) showToast("Tindakan tidak sah.", "error");
+                else if (!updated) showToast("Tindakan tidak sah atau sudah direkodkan.", "error");
                 
                 if (updated) {
                     syncToSheet(record, 'update');
@@ -553,6 +600,7 @@
 
         // ================= CALCULATION ENGINE =================
         function getWorkMode(inTime, outTime) {
+            if (!inTime || !outTime) return 'Unknown';
             const hIn = parseInt(inTime.split(':')[0]);
             const hOut = parseInt(outTime.split(':')[0]);
             if (hIn <= 11 && hOut >= 21) return 'Full';
@@ -614,6 +662,9 @@
                 return matchDate && matchStaff;
             });
 
+            // Sort by Name, then Time In
+            filteredData.sort((a, b) => a.name.localeCompare(b.name) || a.in.localeCompare(b.in));
+
             filteredData.forEach(item => {
                 const calc = calculateSalaryData(item);
                 grandTotal += parseFloat(calc.finalPay);
@@ -633,8 +684,8 @@
                     <td>${calc.isOverbreak ? '<span class="badge badge-error badge-sm">Overbreak</span>' : '<span class="badge badge-success badge-sm">Normal</span>'}</td>
                     <td class="text-right font-bold">RM ${calc.finalPay}</td>
                     <td class="text-center space-x-1">
-                        <button class="btn btn-xs btn-square btn-ghost" onclick="openEditModal(${item.id})"><i class="fa-solid fa-pen"></i></button>
-                        <button class="btn btn-xs btn-square btn-error" onclick="deleteRecord(${item.id})"><i class="fa-solid fa-trash"></i></button>
+                        <button class="btn btn-xs btn-square btn-ghost text-primary" onclick="openEditModal(${item.id})"><i class="fa-solid fa-pen"></i></button>
+                        <button class="btn btn-xs btn-square btn-error" onclick="confirmDelete(${item.id})"><i class="fa-solid fa-trash"></i></button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -643,17 +694,21 @@
             document.getElementById('total-salary-display').innerText = `RM ${grandTotal.toFixed(2)}`;
         }
 
-        // ================= EDIT MODAL =================
+        // ================= EDIT MODAL (UPDATED) =================
         function openEditModal(id) {
             const record = attendanceData.find(r => r.id === id);
             if (!record) return;
+            
+            // Populate Data
             document.getElementById('edit-id').value = record.id;
             document.getElementById('edit-name').value = record.name;
+            document.getElementById('edit-date').value = record.date; // NEW: Populate Date
             document.getElementById('edit-in').value = record.in;
             document.getElementById('edit-out').value = record.out || '';
             document.getElementById('edit-break-start').value = record.breakStart || '';
             document.getElementById('edit-break-end').value = record.breakEnd || '';
             document.getElementById('edit-adjustment').value = record.adjustment || 0;
+            
             document.getElementById('edit_modal').showModal();
         }
 
@@ -662,7 +717,10 @@
         function saveEdit() {
             const id = Number(document.getElementById('edit-id').value);
             const record = attendanceData.find(r => r.id === id);
+            
             if (record) {
+                // Get values including the new Date
+                record.date = document.getElementById('edit-date').value; // NEW: Save Date
                 record.in = document.getElementById('edit-in').value;
                 record.out = document.getElementById('edit-out').value || null;
                 record.breakStart = document.getElementById('edit-break-start').value || null;
@@ -673,7 +731,7 @@
                 saveDataToLocalStorage(); 
                 renderAdminTable();
                 closeModal();
-                showToast("Rekod berjaya dikemaskini", "success");
+                showToast("Rekod berjaya dikemaskini.", "success");
             }
         }
 
@@ -681,11 +739,19 @@
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
-            toast.className = `alert alert-${type} shadow-lg mb-2 cursor-pointer`;
+            toast.className = `alert alert-${type} shadow-lg mb-2 cursor-pointer transition-opacity duration-300`;
             toast.innerHTML = `<span>${message}</span>`;
-            toast.onclick = () => toast.remove();
+            toast.onclick = () => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            };
             container.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
+            setTimeout(() => {
+                if(toast.parentElement) {
+                    toast.classList.add('opacity-0');
+                    setTimeout(() => toast.remove(), 300);
+                }
+            }, 3000);
         }
 
         // ================= QR SCANNER LOGIC =================
@@ -693,31 +759,55 @@
 
         function initScanner() {
             if (html5QrcodeScanner) return;
-            html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+            const readerElement = document.getElementById('reader');
+            html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 }, false);
+            
+            // Clear loading text
+            readerElement.innerHTML = ""; 
+            
             html5QrcodeScanner.render(onScanSuccess, onScanFailure);
         }
 
         function stopScanner() {
             if (html5QrcodeScanner) {
-                html5QrcodeScanner.clear().catch(e => {});
+                html5QrcodeScanner.clear().catch(e => console.error("Failed to clear scanner", e));
                 html5QrcodeScanner = null;
+                // Restore UI placeholder
+                document.getElementById('reader').innerHTML = '<span class="loading loading-infinity loading-lg"></span>';
             }
         }
 
         function onScanSuccess(decodedText, decodedResult) {
+            // Audio Feedback
+            // const audio = new Audio('beep.mp3'); audio.play().catch(e=>{});
+            
             if (decodedText.includes("STAFF:") && decodedText.includes("ACTION:")) {
+                // Format Custom QR: STAF:Nama;ACTION:clockIn
                 const name = decodedText.split(';').find(p => p.startsWith('STAFF:')).split(':')[1];
                 const action = decodedText.split(';').find(p => p.startsWith('ACTION:')).split(':')[1];
-                document.getElementById('staff-select').value = name;
-                executeAction(name, action);
+                
+                if(STAFF_LIST.includes(name)) {
+                    document.getElementById('staff-select').value = name;
+                    handleStaffSelect();
+                    executeAction(name, action);
+                } else {
+                    showToast(`QR untuk ${name} tidak sah dalam sistem.`, "error");
+                }
+
             } else if (STAFF_LIST.includes(decodedText)) {
+                // Format Simple QR: Nama Staf Sahaja
                 document.getElementById('staff-select').value = decodedText;
                 handleStaffSelect(); 
                 showToast(`QR ${decodedText} dikesan.`, "info");
+            } else {
+                showToast("QR tidak dikenali.", "warning");
             }
         }
-        function onScanFailure(error) {}
+        function onScanFailure(error) {
+            // Silent fail to prevent console spam
+        }
 
+        // Initialize
         window.onload = function() {
             document.getElementById('api-url').value = API_URL;
             loadAllData(); 
